@@ -1,3 +1,10 @@
+mod reporter;
+
+mod interpreter_error;
 mod lexing_error;
 
-pub use lexing_error::LexingError;
+pub use self::{
+    interpreter_error::{InterpreterError, InterpreterErrorKind},
+    lexing_error::LexingError,
+    reporter::Reporter,
+};

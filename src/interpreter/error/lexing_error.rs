@@ -4,7 +4,7 @@ use std::num::ParseIntError;
 pub enum LexingError {
     InvalidNumber(String),
     #[default]
-    Other,
+    UnknownCharacter,
 }
 
 impl From<ParseIntError> for LexingError {

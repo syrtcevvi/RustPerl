@@ -1,7 +1,10 @@
-mod lexer;
 mod error;
+mod lexer;
+mod parser;
 
 use lexer::Lexer;
+
+use crate::interpreter::error::Reporter;
 
 pub struct PerlInterpreter<'src> {
     lexer: Lexer<'src>,
@@ -18,6 +21,12 @@ impl<'src> PerlInterpreter<'src> {
         self.lexer.source = source;
         let tokens = self.lexer.tokens().collect::<Vec<_>>();
 
-        dbg!(tokens);
+        dbg!(&tokens);
+
+        for token in tokens {
+            if let Err(err) = token {
+                Reporter::report(source, err, None);
+            }
+        }
     }
 }
