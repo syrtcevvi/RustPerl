@@ -1,0 +1,16 @@
+program:
+    | stmts
+;
+
+stmts:
+    | stmts ";" stmt
+    | stmt
+;
+
+stmt:
+    | MY IDENT "=" expr
+    | expr
+;
+
+expr: NUMBER
+;

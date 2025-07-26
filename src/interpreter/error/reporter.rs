@@ -1,7 +1,8 @@
-
 use ariadne::{Label, Report, ReportKind, Source};
 
-use crate::interpreter::error::{InterpreterError, InterpreterErrorKind, LexingError};
+use crate::interpreter::error::{
+    InterpreterError, InterpreterErrorKind, LexingError, ParsingError,
+};
 
 pub struct Reporter;
 
@@ -27,7 +28,22 @@ impl Reporter {
                 }
                 _ => todo!(),
             },
-            _ => todo!(),
+            InterpreterErrorKind::Parsing(parsing_error) => match parsing_error {
+                ParsingError::SyntaxError(message) => {
+                    todo!()
+                }
+            },
+            InterpreterErrorKind::UnexpectedEndOfInput => {
+                Report::build(ReportKind::Error, (&file_name_or_repl, error.span.clone()))
+                    .with_message("Parsing error")
+                    .with_label(
+                        Label::new((&file_name_or_repl, error.span))
+                            .with_message("Unexpected end of input"),
+                    )
+                    .finish()
+                    .print((&file_name_or_repl, Source::from(source)))
+                    .unwrap();
+            }
         }
     }
 }

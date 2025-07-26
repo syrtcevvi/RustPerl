@@ -1,14 +1,10 @@
 mod token;
 
-
 use logos::Logos;
 
-use crate::interpreter::{
-    error::{InterpreterError, InterpreterErrorKind},
-    lexer::token::TokenKind,
-};
+use crate::interpreter::error::{InterpreterError, InterpreterErrorKind};
 
-use token::Token;
+pub use crate::interpreter::lexer::token::{Ident, Token, TokenKind};
 
 pub struct Lexer<'src> {
     pub(crate) source: &'src str,

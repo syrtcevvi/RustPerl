@@ -4,5 +4,5 @@ use crate::interpreter::PerlInterpreter;
 
 fn main() {
     let mut interpreter = PerlInterpreter::new();
-    interpreter.execute("my $a = 42; my $b = 123; &\n?");
+    interpreter.execute(include_str!("../test.pl"));
 }
