@@ -7,6 +7,9 @@ pub enum Ast<'src> {
     Stmts(Vec<Ast<'src>>),
 
     VariableDefinition { name: Ident<'src>, init_value: Expr },
+    DeclareCurrentPackage { package_name: &'src str },
+    UsePackage { package_name: &'src str },
+
     If(Box<If<'src>>),
     While(Box<While<'src>>),
 

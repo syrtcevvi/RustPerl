@@ -67,7 +67,9 @@ where
                 }
             }
 
-            if let Some(next_token) = self.peek_next_token() && next_token.kind != TokenKind::CurlyBrace("}") {
+            if let Some(next_token) = self.peek_next_token()
+                && next_token.kind != TokenKind::CurlyBrace("}")
+            {
                 return Err(InterpreterError {
                     kind: InterpreterErrorKind::Parsing(ParsingError::SyntaxError(
                         "Missing ';'".to_owned(),
@@ -87,7 +89,7 @@ where
                 TokenKind::If | TokenKind::Unless | TokenKind::While | TokenKind::Until => {
                     return self.parse_stmt_with_block();
                 }
-                TokenKind::My => {
+                TokenKind::My | TokenKind::Use | TokenKind::Package | TokenKind::Number(_) => {
                     return self.parse_stmt();
                 }
                 // This must be empty to allow empty {} blocks within condition and cycle statements
@@ -164,6 +166,16 @@ where
                     init_value: expr.into_expr().unwrap(),
                 })
             }
+            TokenKind::Package => {
+                let package_name = self.match_package_name()?;
+                Ok(Ast::DeclareCurrentPackage { package_name })
+            }
+            TokenKind::Use => {
+                let package_name = self.match_package_name()?;
+                Ok(Ast::UsePackage { package_name })
+            }
+            // TODO proper expression parsing here
+            TokenKind::Number(number) => Ok(Ast::Expr(number)),
             _ => unreachable!(),
         }
     }
@@ -233,6 +245,27 @@ where
         }
         Err(InterpreterError::new_parsing(
             ParsingError::SyntaxError("identifier expected".to_owned()),
+            self.last_token_span.clone(),
+        ))
+    }
+
+    fn match_package_name(&mut self) -> Result<&'src str, InterpreterError> {
+        match self.take_next_token()?.kind {
+            // These tokens has almost the same regex, so it's impossible to distinguish between them
+            // in case of bare identifiers, so allow both
+            TokenKind::PackageName(package_name) => {
+                return Ok(package_name);
+            }
+            TokenKind::Ident(ident) => {
+                if ident.is_bare() {
+                    return Ok(ident.into_bare().unwrap());
+                }
+            }
+            _ => {}
+        }
+
+        Err(InterpreterError::new_parsing(
+            ParsingError::SyntaxError("package name expected".to_owned()),
             self.last_token_span.clone(),
         ))
     }

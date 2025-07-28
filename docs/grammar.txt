@@ -11,6 +11,8 @@ stmts:
 
 stmt:
     | MY IDENT "=" expr
+    | PACKAGE PACKAGE_NAME
+    | USE PACKAGE_NAME
     | expr
 ;
 

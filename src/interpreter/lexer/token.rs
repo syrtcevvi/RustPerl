@@ -38,6 +38,17 @@ pub enum TokenKind<'src> {
     #[display("my")]
     My,
 
+    #[token("use")]
+    #[display("use")]
+    Use,
+    #[token("package")]
+    #[display("package")]
+    Package,
+
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*(::[a-zA-Z0-9_]+)*")]
+    #[display("_0")]
+    PackageName(&'src str),
+
     #[regex(r"(?x) \( | \)")]
     #[display("{_0}")]
     RoundParen(&'src str),
@@ -70,8 +81,11 @@ pub enum TokenKind<'src> {
     #[token("$")]
     #[display("$")]
     Dollar,
+    #[token("::")]
+    #[display("::")]
+    DoubleColon,
 
-    #[regex(r"(\$|@|%)?[a-zA-Z_][a-zA-Z0-9_]*", ident)]
+    #[regex(r"(\$|@|%)?[a-zA-Z_][a-zA-Z0-9_]*", ident, priority = 3)]
     Ident(Ident<'src>),
     // FIXME: add normal decimal number parsing
     #[regex("[0-9]+", |lex| lex.slice().parse())]
@@ -79,7 +93,7 @@ pub enum TokenKind<'src> {
     Number(i64),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, derive_more::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, EnumAsInner, derive_more::Display)]
 pub enum Ident<'src> {
     #[display("_0")]
     Bare(&'src str),
