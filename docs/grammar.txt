@@ -1,15 +1,28 @@
-program:
-    | stmts
+program: stmts
 ;
 
 stmts:
-    | stmts ";" stmt
+    | stmt ";" stmts
+    | stmt_with_block stmts
+    | stmt_with_block
     | stmt
+    | <empty>
 ;
 
 stmt:
     | MY IDENT "=" expr
     | expr
+;
+
+stmt_with_block:
+    | (IF | UNLESS) condition_and_block (ELSIF condition_and_block)* (ELSE block_stmt)?
+    | (WHILE | UNTIL) condition_and_block
+;
+
+condition_and_block: "(" expr ")" block_stmt
+;
+
+block_stmt: "{" stmts "}"
 ;
 
 expr: NUMBER

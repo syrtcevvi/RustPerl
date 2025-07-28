@@ -15,7 +15,7 @@ impl<'src> Lexer<'src> {
         Self { source }
     }
 
-    pub fn tokens(&mut self) -> impl Iterator<Item = Result<Token<'src>, InterpreterError>> {
+    pub fn tokens(&self) -> impl Iterator<Item = Result<Token<'src>, InterpreterError>> {
         TokenKind::lexer(self.source)
             .spanned()
             .map(|(token_kind, span)| {

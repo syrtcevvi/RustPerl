@@ -1,11 +1,11 @@
 mod ast;
 
-use std::{iter::Peekable, ops::Range};
+use std::{iter::Peekable, mem, ops::Range};
 
 use crate::interpreter::{
-    error::{InterpreterError, ParsingError},
+    error::{InterpreterError, InterpreterErrorKind, ParsingError},
     lexer::{Ident, Token, TokenKind},
-    parser::ast::Ast,
+    parser::ast::{Ast, Elsif, If, While},
 };
 
 pub struct Parser<I>
@@ -36,52 +36,139 @@ where
     }
 
     fn parse_stmts(&mut self) -> Result<Ast<'src>, InterpreterError> {
-        let mut lhs = self.parse_stmt()?;
+        // Program can be completely empty or contains only semicolons, btw
+        let mut lhs = Ast::Empty;
+        if let Some(next_token) = self.peek_next_token() {
+            lhs = self.parse_stmt_or_stmt_with_block()?;
 
-        if self.peek_next_token().is_none() {
+            while lhs.does_not_need_separating_semicolon()
+                || self.peek_next_token().map(|t| t.kind) == Some(TokenKind::Semicolon)
+            {
+                // Allows trailing semicolons
+                while self.peek_next_token().map(|t| t.kind) == Some(TokenKind::Semicolon) {
+                    let _ = self.take_next_token();
+                }
+
+                if self.peek_next_token().is_none()
+                    || matches!(
+                        self.peek_next_token().unwrap().kind,
+                        TokenKind::CurlyBrace("}")
+                    )
+                {
+                    return Ok(lhs);
+                }
+
+                let rhs = self.parse_stmt_or_stmt_with_block()?;
+
+                if lhs.is_stmts() {
+                    lhs.push_stmt(rhs);
+                } else {
+                    lhs = Ast::Stmts(vec![lhs, rhs]);
+                }
+            }
+
+            if let Some(next_token) = self.peek_next_token() && next_token.kind != TokenKind::CurlyBrace("}") {
+                return Err(InterpreterError {
+                    kind: InterpreterErrorKind::Parsing(ParsingError::SyntaxError(
+                        "Missing ';'".to_owned(),
+                    )),
+                    span: (self.last_token_span.start + 1..self.last_token_span.end + 1),
+                });
+            }
+
             return Ok(lhs);
         }
+        Ok(lhs)
+    }
 
-        while self.peek_next_token().is_some() && self.match_token(TokenKind::Semicolon)? {
-            // Makes trailing semicolon optional
-            if self.peek_next_token().is_none()
-                || matches!(
-                    self.peek_next_token().unwrap().kind,
-                    TokenKind::CurlyBrace("}")
-                )
-            {
-                return Ok(lhs);
-            }
-
-            let rhs = self.parse_stmt()?;
-
-            if lhs.is_stmts() {
-                lhs.push_stmt(rhs);
-            } else {
-                lhs = Ast::Stmts(vec![lhs, rhs]);
+    fn parse_stmt_or_stmt_with_block(&mut self) -> Result<Ast<'src>, InterpreterError> {
+        if let Some(next_token) = self.peek_next_token() {
+            match next_token.kind {
+                TokenKind::If | TokenKind::Unless | TokenKind::While | TokenKind::Until => {
+                    return self.parse_stmt_with_block();
+                }
+                TokenKind::My => {
+                    return self.parse_stmt();
+                }
+                // This must be empty to allow empty {} blocks within condition and cycle statements
+                _ => {}
             }
         }
 
-        Ok(lhs)
+        Ok(Ast::Empty)
+    }
+
+    fn parse_stmt_with_block(&mut self) -> Result<Ast<'src>, InterpreterError> {
+        match self.take_next_token()?.kind {
+            // TODO invert condition in case of unless || until
+            TokenKind::If => {
+                let (condition, block) = self.parse_condition_and_block()?;
+                let mut if_ = If {
+                    condition,
+                    block,
+                    elsif_blocks: vec![],
+                    else_block: None,
+                };
+
+                while let Some(maybe_elsif) = self.peek_next_token()
+                    && maybe_elsif.kind == TokenKind::Elsif
+                {
+                    self.take_next_token().unwrap();
+                    let (condition, block) = self.parse_condition_and_block()?;
+                    if_.elsif_blocks.push(Elsif { block, condition });
+                }
+
+                if let Some(maybe_else) = self.peek_next_token()
+                    && maybe_else.kind == TokenKind::Else
+                {
+                    self.take_next_token().unwrap();
+                    let else_block = self.parse_block_stmt()?;
+                    if_.else_block = Some(else_block);
+                }
+
+                Ok(Ast::If(Box::new(if_)))
+            }
+            TokenKind::While => {
+                let (condition, block) = self.parse_condition_and_block()?;
+
+                Ok(Ast::While(Box::new(While { condition, block })))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_condition_and_block(&mut self) -> Result<(Ast<'src>, Ast<'src>), InterpreterError> {
+        self.match_token_by_value(&TokenKind::RoundParen("("))?;
+        let condition = self.parse_expr()?;
+        self.match_token_by_value(&TokenKind::RoundParen(")"))?;
+        let block = self.parse_block_stmt()?;
+
+        Ok((condition, block))
+    }
+
+    fn parse_block_stmt(&mut self) -> Result<Ast<'src>, InterpreterError> {
+        self.match_token_by_value(&TokenKind::CurlyBrace("{"))?;
+        let block = self.parse_stmts()?;
+        self.match_token_by_value(&TokenKind::CurlyBrace("}"))?;
+        Ok(block)
     }
 
     fn parse_stmt(&mut self) -> Result<Ast<'src>, InterpreterError> {
         match self.take_next_token()?.kind {
             TokenKind::My => {
                 let variable_name = self.match_ident()?;
-                self.match_token(TokenKind::Equal)?;
+                self.match_token_by_kind(&TokenKind::Equal)?;
                 let expr = self.parse_expr()?;
-                return Ok(Ast::VariableDefinition {
+                Ok(Ast::VariableDefinition {
                     name: variable_name,
                     init_value: expr.into_expr().unwrap(),
-                });
+                })
             }
-            _ => todo!(),
+            _ => unreachable!(),
         }
-        todo!()
     }
 
-    fn parse_expr(&mut self) -> Result<Ast, InterpreterError> {
+    fn parse_expr(&mut self) -> Result<Ast<'src>, InterpreterError> {
         self.match_number().map(Ast::Expr)
     }
 
@@ -89,13 +176,36 @@ where
         todo!()
     }
 
-    fn match_token(&mut self, token_kind: TokenKind) -> Result<bool, InterpreterError> {
-        if matches!(self.take_next_token()?.kind, token_kind) {
+    fn match_token_by_kind(
+        &mut self,
+        expected_token_kind: &TokenKind,
+    ) -> Result<bool, InterpreterError> {
+        let current_token_kind = &self.take_next_token()?.kind;
+        if mem::discriminant(current_token_kind) == mem::discriminant(expected_token_kind) {
             return Ok(true);
         }
 
         Err(InterpreterError::new_parsing(
-            ParsingError::SyntaxError("todo!".to_owned()),
+            ParsingError::SyntaxError(format!(
+                "Expected '{expected_token_kind}', but found: '{current_token_kind}'"
+            )),
+            self.last_token_span.clone(),
+        ))
+    }
+
+    fn match_token_by_value(
+        &mut self,
+        expected_token_kind: &TokenKind,
+    ) -> Result<bool, InterpreterError> {
+        let current_token_kind = self.take_next_token()?.kind;
+        if current_token_kind == *expected_token_kind {
+            return Ok(true);
+        }
+
+        Err(InterpreterError::new_parsing(
+            ParsingError::SyntaxError(format!(
+                "Expected '{expected_token_kind}', but found: '{current_token_kind}'"
+            )),
             self.last_token_span.clone(),
         ))
     }
@@ -122,7 +232,7 @@ where
             return Ok(maybe_ident.kind.into_ident().unwrap());
         }
         Err(InterpreterError::new_parsing(
-            ParsingError::SyntaxError("ident expected".to_owned()),
+            ParsingError::SyntaxError("identifier expected".to_owned()),
             self.last_token_span.clone(),
         ))
     }
@@ -147,9 +257,11 @@ where
             self.last_token_span = next_token.span.clone();
             Ok(next_token)
         } else {
-            Err(InterpreterError::new_unexpected_eoi(
-                self.last_token_span.clone(),
-            ))
+            Err(self.get_eof_error())
         }
+    }
+
+    fn get_eof_error(&self) -> InterpreterError {
+        InterpreterError::new_unexpected_eoi(self.last_token_span.clone())
     }
 }

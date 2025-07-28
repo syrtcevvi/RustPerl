@@ -7,10 +7,6 @@ use crate::interpreter::error::{
 pub struct Reporter;
 
 impl Reporter {
-    pub fn new() -> Self {
-        Self
-    }
-
     pub fn report(source: &str, error: InterpreterError, file_name: Option<String>) {
         let file_name_or_repl = file_name.unwrap_or("REPL".to_owned());
         match error.kind {
@@ -30,7 +26,15 @@ impl Reporter {
             },
             InterpreterErrorKind::Parsing(parsing_error) => match parsing_error {
                 ParsingError::SyntaxError(message) => {
-                    todo!()
+                    Report::build(ReportKind::Error, (&file_name_or_repl, error.span.clone()))
+                        .with_message(&message)
+                        // TODO more context lines
+                        .with_label(
+                            Label::new((&file_name_or_repl, error.span)).with_message(&message),
+                        )
+                        .finish()
+                        .print((&file_name_or_repl, Source::from(source)))
+                        .unwrap();
                 }
             },
             InterpreterErrorKind::UnexpectedEndOfInput => {

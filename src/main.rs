@@ -15,7 +15,7 @@ fn main() {
     if let Some(path_to_script) = cli_args.path_to_script {
         interpreter.execute("todo!");
     } else {
-        run_repl(&mut interpreter);
+        let _ = run_repl(&mut interpreter);
     }
 }
 

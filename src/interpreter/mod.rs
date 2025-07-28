@@ -7,37 +7,34 @@ use crate::interpreter::error::Reporter;
 use lexer::Lexer;
 use parser::Parser;
 
-pub struct PerlInterpreter {
-    // lexer: Lexer<'src>,
-}
+pub struct PerlInterpreter {}
 
 impl PerlInterpreter {
     pub fn new() -> Self {
-        Self {
-            // lexer: Lexer::new(""),
-        }
+        Self {}
     }
 
     pub fn execute(&mut self, source: &str) {
-        let mut lexer = Lexer::new(source);
-        // TODO process lexer errors?
-        let mut parser = Parser::new(lexer.tokens().filter_map(|t| t.ok()));
+        let lexer = Lexer::new(source);
+        let tokens_without_errors = lexer
+            .tokens()
+            // Probably it's more appropriate to decide what to do with an error based on the type of the error
+            .filter_map(|maybe_token| {
+                if let Err(error) = maybe_token {
+                    Reporter::report(source, error.clone(), None);
+                    return None;
+                }
+                Some(maybe_token.unwrap())
+            });
+
+        let mut parser = Parser::new(tokens_without_errors);
         let ast = parser.parse();
 
         dbg!(&ast);
 
+        // TODO allow multiple parsing errors
         if let Err(error) = ast {
             Reporter::report(source, error, None);
         }
-
-        // let tokens = self.lexer.tokens().collect::<Vec<_>>();
-
-        // dbg!(&tokens);
-
-        // for token in tokens {
-        //     if let Err(err) = token {
-        //         Reporter::report(source, err, None);
-        //     }
-        // }
     }
 }
